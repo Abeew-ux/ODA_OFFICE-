@@ -1,0 +1,56 @@
+# Fabrique l'application Android (APK) ODA ADMIN automatiquement.
+# Lance-le : onglet "Actions" > "Fabriquer l'APK" > "Run workflow" (ou à chaque envoi de index.html).
+# Le fichier se télécharge ensuite dans "Releases" (colonne de droite du dépôt) : ODA-ADMIN.apk
+name: Fabriquer l'APK admin
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['index.html', 'manifest.json', 'icon-*.png', '.github/workflows/apk.yml']
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Préparer l'application web
+        run: |
+          mkdir -p www
+          cp index.html manifest.json www/
+          cp icon-*.png www/
+      - name: Projet Android (Capacitor)
+        run: |
+          npm init -y >/dev/null
+          npm i @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+          npx cap init "ODA ADMIN" com.odashop.admin --web-dir www
+          npx cap add android
+          npx cap sync android
+      - name: Autorisation (appareil photo) et icône
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <application#' "$M"
+          R=android/app/src/main/res
+          rm -rf $R/mipmap-anydpi-v26
+          for d in $R/mipmap-*; do
+            cp icon-192.png $d/ic_launcher.png
+            cp icon-192.png $d/ic_launcher_round.png
+            cp icon-192.png $d/ic_launcher_foreground.png
+          done
+      - name: Construire l'APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Publier l'APK (Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ODA-ADMIN.apk
+          gh release delete admin-apk-latest -y --cleanup-tag || true
+          gh release create admin-apk-latest ODA-ADMIN.apk --title "ODA ADMIN - application Android" --notes "Télécharge ODA-ADMIN.apk puis installe-le sur ton téléphone."
+      - uses: actions/upload-artifact@v4
+        with: { name: ODA-ADMIN-apk, path: ODA-ADMIN.apk }
+        
