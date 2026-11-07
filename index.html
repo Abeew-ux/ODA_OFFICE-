@@ -68,7 +68,7 @@ textarea{min-height:60px;resize:vertical}
 </head>
 <body>
 <header>
-  <div class="top"><img class="logo" id="logo" alt="ODA SHOP"><div class="ttl"><h1>Gestion ODA SHOP <small style="font-size:9px;color:#8a8a8a;font-weight:600">v6</small></h1><div class="who" id="who">Chargement...</div></div><button class="lg" id="lg" type="button">Se connecter</button></div>
+  <div class="top"><img class="logo" id="logo" alt="ODA SHOP"><div class="ttl"><h1>Gestion ODA SHOP <small style="font-size:9px;color:#8a8a8a;font-weight:600">v7</small></h1><div class="who" id="who">Chargement...</div></div><button class="lg" id="lg" type="button">Se connecter</button></div>
   <div class="tabs" id="tabs"></div>
   <input class="srch" id="q" type="search" placeholder="Chercher : code ODA-001, nom, vendeur, téléphone..." autocomplete="off">
 </header>
@@ -258,7 +258,11 @@ function envoyer(blob,type,label){ // envoi vers Cloudflare avec barre de progre
     x.upload.onprogress=e=>{if(e.lengthComputable){$('bari').style.width=Math.round(e.loaded/e.total*100)+'%';$('fmsg').textContent=label+' '+Math.round(e.loaded/e.total*100)+'%'}};
     x.onload=()=>{if(x.status>=200&&x.status<300){try{const u=JSON.parse(x.responseText).url;u?ok(u):ko(new Error("Cloudflare n'a pas renvoyé le lien"))}catch(e){ko(new Error('Réponse Cloudflare invalide'))}}
       else{let m='';try{m=JSON.parse(x.responseText).error||''}catch(e){}ko(new Error(m||('Envoi vers Cloudflare impossible ('+x.status+')')))}};
-    x.onerror=()=>ko(new Error('Envoi impossible : vérifie ta connexion'));x.send(blob);
+    x.onerror=async()=>{ // on interroge le Worker pour dire précisément ce qui ne va pas
+      try{const r=await fetch(CF_UPLOAD_URL);const j=await r.json();
+        ko(new Error(j.bucket===false?"Le Worker n'est pas relié au bucket : Cloudflare > Worker oda-photos > Paramètres > Reliures > Bucket R2, nom BUCKET":"Le Worker répond mais l'envoi a échoué (fichier trop lourd ? réessaie avec moins de photos)"))}
+      catch(e){ko(new Error("Impossible de joindre le Worker (connexion coupée ou Worker non déployé)"))}};
+    x.send(blob);
   });
 }
 // code unique et simple : ODA-001, ODA-002...
